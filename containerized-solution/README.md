@@ -1,4 +1,4 @@
-# Docker Swarm on AWS - FastAPI Upload Demo with Load Balancer & Auto Scaling
+# Containerized Solution
 
 🐳 **Production-ready Docker Swarm-kluster med FastAPI, Application Load Balancer och Auto Scaling på AWS**
 
@@ -13,65 +13,6 @@ Ett komplett projekt som visar hur man skapar ett skalbart Docker Swarm-kluster 
 - **Använder Terraform** för infrastructure as code
 - **Deployer FastAPI-app** med image upload till ECR
 - **Production-ready setup** med health checks och redundans
-
-## 🚀 Snabbstart
-
-### Förutsättningar
-
-- [Terraform](https://www.terraform.io/downloads) installerat
-- [AWS CLI](https://aws.amazon.com/cli/) konfigurerat med ECR-behörigheter
-- [Docker](https://docs.docker.com/get-docker/) installerat
-
-### 1. Klona och konfigurera
-
-```bash
-git clone <detta-repo>
-cd python-docker-swarm-demo
-
-# Konfigurera region och instance-typer (valfritt)
-# Redigera terraform/terraform.tfvars
-```
-
-### 2. En-kommando deployment
-
-```bash
-cd scripts
-./first-time-deploy.sh
-```
-
-Detta kommer att:
-
-1. 🏗️ Skapa komplett infrastruktur med Terraform (ALB + ASG + CloudWatch)
-2. ⏳ Vänta på Docker Swarm-initialisering
-3. 📦 Skapa ECR repository
-4. 🔨 Bygga och pusha FastAPI-appen
-5. 🚀 Deploya till swarm-klustret med load balancer
-6. ✅ Verifiera deployment och health checks
-
-⏱️ **Total tid: ~7-10 minuter**
-
-### 3. Testa din deployment
-
-Dina tjänster kommer att vara tillgängliga via **Load Balancer**:
-
-- **🚀 FastAPI Upload Demo**: `http://<alb-dns>:8001`
-- **📊 Docker Visualizer**: `http://<alb-dns>:8080`
-- **🌐 Nginx**: `http://<alb-dns>`
-
-```bash
-# Hämta Load Balancer URL från output
-cd terraform
-terraform output load_balancer_dns
-```
-
-### 4. Komplett cleanup
-
-```bash
-cd scripts
-./cleanup-all.sh
-```
-
-Detta tar bort ALLT: infrastruktur, ECR repository, SSH-nycklar.
 
 ## 🛠️ Vad inkluderas?
 
