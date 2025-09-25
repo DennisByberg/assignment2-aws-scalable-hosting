@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-source "$(dirname "$0")/utils.sh"
+source "$(dirname "$0")/../../../shared/scripts/utils.sh"
 
 # Configuration
 AWS_REGION="eu-north-1"
@@ -45,7 +45,7 @@ get_aws_account_info() {
 
 # Wait for Docker Swarm to initialize
 wait_for_swarm_init() {
-    sleep 120
+    sleep 30
 }
 
 # Create ECR repository if needed
@@ -151,21 +151,6 @@ deploy_fastapi_service() {
     "
 }
 
-# Wait for Load Balancer health checks
-wait_for_health_checks() {
-    sleep 120
-}
-
-# Test endpoints via Load Balancer
-test_endpoints() {
-    for i in {1..20}; do
-        if curl -s "http://${ALB_DNS}:8001/health" >/dev/null 2>&1; then
-            break
-        fi
-        sleep 15
-    done
-}
-
 # Execute deployment process
 print_info "Deploying infrastructure..."
 (deploy_infrastructure) & spinner $!
@@ -194,14 +179,9 @@ print_info "Deploying basic stack to Docker Swarm..."
 print_info "Deploying FastAPI service globally..."
 (deploy_fastapi_service) & spinner $!
 
-print_info "Waiting for Load Balancer health checks..."
-(wait_for_health_checks) & spinner $!
-
-print_info "Testing endpoints..."
-(test_endpoints) & spinner $!
-
 print_success "Deployment completed!"
-print_info "Nginx: http://${ALB_DNS}"
-print_info "Visualizer: http://${ALB_DNS}:8080"
-print_info "FastAPI: http://${ALB_DNS}:8001"
-print_info "SSH to manager: ssh -i ${SSH_KEY_PATH} ec2-user@${MANAGER_IP}"
+echo "--------------------------"
+print_success "FastAPI: http://${ALB_DNS}:8001"
+print_success "Nginx: http://${ALB_DNS}"
+print_success "Visualizer: http://${ALB_DNS}:8080"
+print_success "SSH to manager: ssh -i ${SSH_KEY_PATH} ec2-user@${MANAGER_IP}"

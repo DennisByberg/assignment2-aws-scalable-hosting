@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-source "$(dirname "$0")/utils.sh"
+source "$(dirname "$0")/../../shared/scripts/utils.sh"
 
 # Configuration
 AWS_REGION="eu-north-1"
