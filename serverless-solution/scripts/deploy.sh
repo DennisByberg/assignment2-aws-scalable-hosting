@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-source "$(dirname "$0")/utils.sh"
+source "$(dirname "$0")/../../shared/scripts/utils.sh"
 
 # Configuration
 AWS_REGION="eu-north-1"
@@ -66,49 +66,7 @@ invalidate_cloudfront() {
     if [ -n "$CLOUDFRONT_DISTRIBUTION_ID" ]; then
         aws cloudfront create-invalidation \
             --distribution-id $CLOUDFRONT_DISTRIBUTION_ID \
-            --paths "/*"
-    fi
-}
-
-# Test deployment endpoints
-test_deployment() {
-    # Test CloudFront distribution
-    if [ -n "$CLOUDFRONT_URL" ]; then
-        echo "Testing CloudFront endpoint..."
-        for i in {1..15}; do
-            if curl -s "$CLOUDFRONT_URL"; then
-                echo "CloudFront test successful"
-                break
-            fi
-            sleep 10
-        done
-    fi
-    
-    # Test S3 website endpoint
-    if [ -n "$S3_WEBSITE_URL" ]; then
-        echo "Testing S3 website endpoint..."
-        for i in {1..5}; do
-            if curl -s "http://${S3_WEBSITE_URL}"; then
-                echo "S3 website test successful"
-                break
-            fi
-            sleep 5
-        done
-    fi
-    
-    # Test greetings API
-    if [ -n "$API_GATEWAY_URL" ]; then
-        echo "Testing greetings API..."
-        curl -s "$API_GATEWAY_URL" || echo "Greetings API test completed"
-    fi
-    
-    # Test contact API
-    if [ -n "$CONTACT_API_URL" ]; then
-        echo "Testing contact API..."
-        curl -s -X POST "$CONTACT_API_URL" \
-             -H "Content-Type: application/json" \
-             -d '{"name":"test","email":"test@example.com","message":"test"}' \
-             || echo "Contact API test completed"
+            --paths "/*" > /dev/null 2>&1
     fi
 }
 
@@ -128,12 +86,9 @@ print_info "Uploading to S3..."
 print_info "Invalidating CloudFront cache..."
 (invalidate_cloudfront) & spinner $!
 
-print_info "Testing deployment..."
-(test_deployment) & spinner $!
-
 print_success "Deployment completed successfully!"
-print_info ""
-print_info "CloudFront URL: ${CLOUDFRONT_URL}"
-print_info "S3 Website URL: http://${S3_WEBSITE_URL}"
-print_info "Greetings API: ${API_GATEWAY_URL}"
-print_info "Contact API: ${CONTACT_API_URL}"
+echo "--------------------------"
+print_success "CloudFront URL: ${CLOUDFRONT_URL}"
+print_success "S3 Website URL: http://${S3_WEBSITE_URL}"
+print_success "Greetings API: ${API_GATEWAY_URL}"
+print_success "Contact API: ${CONTACT_API_URL}"

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-source "$(dirname "$0")/utils.sh"
+source "$(dirname "$0")/../../../shared/scripts/utils.sh"
 
 # Configuration
 AWS_REGION="eu-north-1"
@@ -85,7 +85,6 @@ cleanup_s3_bucket() {
         # Remove all current objects (in case versioning is disabled)
         aws s3 rm "s3://$bucket_name" --recursive --region "$AWS_REGION" >/dev/null 2>&1 || true
         
-        # Wait for eventual consistency
         sleep 5
         
         # Delete the bucket itself
