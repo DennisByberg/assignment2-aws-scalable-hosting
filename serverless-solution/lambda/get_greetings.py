@@ -7,7 +7,7 @@ def lambda_handler(event, context):
     try:
         # Initialize DynamoDB
         dynamodb = boto3.resource("dynamodb")
-        table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE"))
+        table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE"))  # type: ignore
 
         # Get all greetings
         response = table.scan()

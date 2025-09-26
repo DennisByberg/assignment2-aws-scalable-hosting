@@ -4,46 +4,41 @@ This page lists the main technologies and services used in the architecture of t
 
 ## Backend (Serverless)
 
-- **AWS Lambda** – Serverless compute for backend logic
-- **Amazon API Gateway** – Handles REST APIs with CORS support
-- **Amazon DynamoDB** – NoSQL database for data storage with streams
-- **Amazon S3** – Storage for static files and frontend assets
+- **AWS Lambda** – Serverless compute functions for API endpoints
+- **Python** – Programming language for Lambda functions
+- **Amazon API Gateway** – REST API management and routing
+- **Amazon DynamoDB** – NoSQL database for contact information storage
 - **Amazon SES** – Simple Email Service for contact form notifications
-- **Amazon CloudFront** – CDN for global content delivery
-- **AWS IAM** – Permissions and security management
 
-## Infrastructure
+## Storage & Content Delivery
 
-- **Terraform** – Infrastructure as Code for provisioning AWS resources
+- **Amazon S3** – Static website hosting and file storage
+- **Amazon CloudFront** – CDN for global content delivery and caching
+
+## Infrastructure as Code
+
+- **Terraform** – Infrastructure provisioning and management
 - **Bash scripting** – Deployment automation and utility scripts
 
 ## Frontend
 
-- **React** – Modern JavaScript framework for frontend
-- **TypeScript** – Typed JavaScript for better development experience
-- **Mantine (MantineUI)** – React component library with modern design
-- **Vite** – Fast build tool and development server for React
-- **TanStack Query (React Query)** – Data fetching and caching library
-- **React Router** – Client-side routing for single-page application
-- **HTML/CSS** – Standard web development
-- **Node.js** – JavaScript runtime for building the frontend
+- **HTML5** – Markup language for web interface
+- **CSS3** – Styling with responsive design
+- **Vanilla JavaScript** – Client-side interactivity and API calls
+- **Fetch API** – Asynchronous HTTP requests to Lambda functions
 
 ## Development Tools
 
-- **ESLint** – Code linting and quality checks
 - **AWS CLI** – Command-line interface for AWS services
-- **Python 3.9** – Runtime for Lambda functions
+- **Python Zip Packaging** – Lambda deployment packages
+- **Git** – Version control system
 
-## Architecture Patterns
+## Security & Access Management
 
-- **Serverless Architecture** – Event-driven, pay-per-use compute model
-- **Infrastructure as Code (IaC)** – Automated, version-controlled infrastructure
-- **Single Page Application (SPA)** – Client-side rendered web application
-- **RESTful APIs** – HTTP-based service architecture
-- **Event-Driven Architecture** – DynamoDB Streams trigger email notifications
+- **AWS IAM** – Roles and policies for secure Lambda execution
+- **CORS Configuration** – Cross-origin resource sharing for API access
 
 ## Other
 
-- **Git** – Version control
-- **GitHub** – Code hosting and collaboration
 - **WSL Ubuntu 24.04** – Development environment
+- **GitHub** – Code hosting and collaboration
