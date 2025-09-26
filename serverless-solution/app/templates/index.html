@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AWS Serverless Solution</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>AWS Serverless Solution</h1>
+
+      <nav class="nav">
+        <a href="#" data-page="home" class="active">Greetings</a>
+        <a href="#" data-page="contact">Contact</a>
+      </nav>
+
+      <!-- Home Page -->
+      <div id="home-page" class="page-content">
+        <div class="greetings-section">
+          <h2>Solution: <span class="solution-title">Greetings</span></h2>
+          <p class="description-text">
+            This application demonstrates a complete serverless data flow. The animated
+            greetings below are fetched in real-time from an AWS DynamoDB database through
+            a Lambda API endpoint.
+          </p>
+          <p class="backend-flow">Backend: DynamoDB → Lambda API → Frontend</p>
+
+          <div id="greetings-display">
+            <div class="loading">Loading greetings...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contact Page -->
+      <div id="contact-page" class="page-content contact-page-hidden">
+        <div class="contact-form">
+          <h2>Solution: <span class="solution-title">Contact Form</span></h2>
+          <p class="description-text">
+            This contact form demonstrates a complete serverless communication pipeline.
+            When you submit your message, it's processed through AWS Lambda functions,
+            stored securely in DynamoDB, and automatically sends an email notification.
+          </p>
+          <p class="backend-flow">
+            Frontend → Lambda API → DynamoDB → SES Email → Configured Recipient
+          </p>
+
+          <div id="local-warning" class="message error local-warning">
+            <strong>Local Development Mode</strong><br />
+            Contact form is disabled in local environment. Deploy to AWS to enable email
+            functionality.
+          </div>
+
+          <div id="contact-messages"></div>
+
+          <form id="contact-form">
+            <div class="form-group">
+              <label for="name">Name</label>
+              <input type="text" id="name" name="name" required />
+            </div>
+
+            <div class="form-group">
+              <label for="email">Email</label>
+              <input type="email" id="email" name="email" required />
+            </div>
+
+            <div class="form-group">
+              <label for="message">Message</label>
+              <textarea id="message" name="message" required></textarea>
+            </div>
+
+            <button type="submit" id="submit-btn">Send Message</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Inject API URLs from backend
+      window.API_URLS = {
+        greetings: '{{ api_gateway_url }}' || 'http://localhost:8000/api/greetings',
+        contact: '{{ contact_api_url }}' || 'http://localhost:8000/api/contact',
+      };
+    </script>
+    <script src="/static/script.js"></script>
+  </body>
+</html>

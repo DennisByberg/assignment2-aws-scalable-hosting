@@ -3,10 +3,9 @@
 set -e
 source "$(dirname "$0")/../../shared/scripts/utils.sh"
 
-# Configuration
 AWS_REGION="eu-north-1"
 
-# Get terraform output safely - returns empty if not found
+# Get terraform output
 get_output() {
     local name="$1"
     cd ../terraform
@@ -15,7 +14,6 @@ get_output() {
 }
 
 # Disable CloudFront distribution before deletion
-# CloudFront must be disabled before Terraform can delete it
 disable_cloudfront() {
     local distribution_id=$(get_output "cloudfront_distribution_id")
     
@@ -23,7 +21,6 @@ disable_cloudfront() {
         return 0
     fi
     
-    # Check if distribution is currently enabled
     local is_enabled=$(aws cloudfront get-distribution \
         --id "$distribution_id" \
         --query 'Distribution.DistributionConfig.Enabled' \
@@ -33,7 +30,6 @@ disable_cloudfront() {
         return 0
     fi
     
-    # Get current configuration and ETag for update
     local etag=$(aws cloudfront get-distribution-config \
         --id "$distribution_id" \
         --query 'ETag' \
@@ -43,25 +39,19 @@ disable_cloudfront() {
         return 0
     fi
     
-    # Get current config and modify it to disable distribution
     aws cloudfront get-distribution-config \
         --id "$distribution_id" \
         --query 'DistributionConfig' > /tmp/dist-config.json
     
-    # Change Enabled from true to false
     sed -i 's/"Enabled": true/"Enabled": false/g' /tmp/dist-config.json
     
-    # Apply the disabled configuration
     aws cloudfront update-distribution \
         --id "$distribution_id" \
         --distribution-config file:///tmp/dist-config.json \
         --if-match "$etag" >/dev/null
     
-    # Clean up temporary file
     rm -f /tmp/dist-config.json
     
-    # Wait for CloudFront to finish processing the change
-    # This can take several minutes
     local attempts=0
     local max_attempts=20
     
@@ -80,8 +70,7 @@ disable_cloudfront() {
     done
 }
 
-# Empty S3 bucket completely before Terraform destroys it
-# S3 buckets must be empty before they can be deleted
+# Empty S3 bucket completely
 empty_s3_bucket() {
     local bucket_name=$(get_output "s3_bucket_name")
     
@@ -89,12 +78,10 @@ empty_s3_bucket() {
         return 0
     fi
     
-    # Check if bucket exists
     if ! aws s3api head-bucket --bucket "$bucket_name" >/dev/null 2>&1; then
         return 0
     fi
     
-    # Delete all object versions (for versioned buckets)
     aws s3api list-object-versions \
         --bucket "$bucket_name" \
         --query 'Versions[].[Key,VersionId]' \
@@ -108,7 +95,6 @@ empty_s3_bucket() {
         fi
     done
     
-    # Delete all delete markers (versioned bucket cleanup)
     aws s3api list-object-versions \
         --bucket "$bucket_name" \
         --query 'DeleteMarkers[].[Key,VersionId]' \
@@ -122,10 +108,8 @@ empty_s3_bucket() {
         fi
     done
     
-    # Remove any remaining objects (fallback cleanup)
     aws s3 rm "s3://$bucket_name" --recursive >/dev/null 2>&1 || true
     
-    # Wait for AWS eventual consistency
     sleep 5
 }
 
@@ -147,4 +131,3 @@ print_info "Destroying infrastructure..."
 (destroy_infrastructure) & spinner $!
 
 print_success "All AWS resources have been removed!"
-print_info "CloudFront distribution disabled and infrastructure destroyed"

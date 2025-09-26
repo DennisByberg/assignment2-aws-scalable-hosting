@@ -1,7 +1,8 @@
 import json
 import boto3
+from boto3.dynamodb.conditions import Key
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -58,8 +59,8 @@ def lambda_handler(event, context):
                 ),
             }
 
-        # Initialize DynamoDB client
-        dynamodb = boto3.resource("dynamodb")
+        # Initialize DynamoDB resource
+        dynamodb = boto3.resource("dynamodb")  # type: ignore
         table_name = os.environ.get("CONTACTS_TABLE_NAME")
 
         if not table_name:
@@ -74,7 +75,7 @@ def lambda_handler(event, context):
                 "body": json.dumps({"error": "Server configuration error"}),
             }
 
-        table = dynamodb.Table(table_name)
+        table = dynamodb.Table(table_name)  # type: ignore
 
         # Create contact item
         contact_item = {
@@ -82,7 +83,7 @@ def lambda_handler(event, context):
             "name": name,
             "email": email,
             "message": message,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         print(f"Saving contact item: {json.dumps(contact_item)}")
