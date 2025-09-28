@@ -1,9 +1,16 @@
-# Terraform and AWS Provider Configuration
 terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 6.14.0"
+      version = "~> 6.14.1"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.7.2"
+    }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.7.1"
     }
   }
 }
@@ -11,36 +18,45 @@ terraform {
 # AWS Provider configuration
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = {
+      Project     = var.project_name
+      Environment = var.environment
+      ManagedBy   = "Terraform"
+    }
+  }
 }
 
-# S3 bucket for static website hosting
+# Generate unique suffix for resources
+resource "random_string" "unique_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+# Storage layer: S3 bucket and DynamoDB tables
 module "storage" {
   source = "./modules/storage"
 
-  project_name = var.project_name
-  environment  = var.environment
-  from_email   = var.from_email
-  to_email     = var.to_email
+  project_name  = var.project_name
+  environment   = var.environment
+  unique_suffix = random_string.unique_suffix.result
 }
 
-# Lambda function and API Gateway
+# Compute layer: Lambda functions and API Gateway
 module "compute" {
   source = "./modules/compute"
 
-  project_name = var.project_name
-  environment  = var.environment
-  from_email   = var.from_email
-  to_email     = var.to_email
-
-  # Pass storage outputs to compute module
-  greetings_table_name      = module.storage.greetings_table_name
-  greetings_table_arn       = module.storage.greetings_table_arn
-  contacts_table_name       = module.storage.contacts_table_name
-  contacts_table_arn        = module.storage.contacts_table_arn
-  contacts_table_stream_arn = module.storage.contacts_table_stream_arn
+  project_name         = var.project_name
+  environment          = var.environment
+  greetings_table_name = module.storage.greetings_table_name
+  greetings_table_arn  = module.storage.greetings_table_arn
+  contacts_table_name  = module.storage.contacts_table_name
+  contacts_table_arn   = module.storage.contacts_table_arn
 }
 
-# CloudFront CDN
+# CDN layer: CloudFront distribution
 module "cdn" {
   source = "./modules/cdn"
 

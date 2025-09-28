@@ -18,19 +18,9 @@ output "contact_lambda_name" {
   value       = aws_lambda_function.add_contact_info.function_name
 }
 
-output "email_lambda_name" {
-  description = "Name of the email Lambda function"
-  value       = aws_lambda_function.send_contact_email.function_name
-}
-
 output "add_contact_function_arn" {
   description = "ARN of the add contact Lambda function"
   value       = aws_lambda_function.add_contact_info.arn
-}
-
-output "send_email_function_arn" {
-  description = "ARN of the send email Lambda function"
-  value       = aws_lambda_function.send_contact_email.arn
 }
 
 output "get_greetings_function_arn" {

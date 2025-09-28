@@ -37,17 +37,15 @@
         <div class="contact-form">
           <h2>Solution: <span class="solution-title">Contact Form</span></h2>
           <p class="description-text">
-            This contact form demonstrates a complete serverless communication pipeline.
-            When you submit your message, it's processed through AWS Lambda functions,
-            stored securely in DynamoDB, and automatically sends an email notification.
+            This contact form demonstrates serverless data storage. When you submit your
+            message, it's processed through AWS Lambda functions and stored securely in
+            DynamoDB for future reference.
           </p>
-          <p class="backend-flow">
-            Frontend → Lambda API → DynamoDB → SES Email → Configured Recipient
-          </p>
+          <p class="backend-flow">Frontend → Lambda API → DynamoDB Storage</p>
 
           <div id="local-warning" class="message error local-warning">
             <strong>Local Development Mode</strong><br />
-            Contact form is disabled in local environment. Deploy to AWS to enable email
+            Contact form is disabled in local environment. Deploy to AWS to enable storage
             functionality.
           </div>
 

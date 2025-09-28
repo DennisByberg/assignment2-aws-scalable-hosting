@@ -1,17 +1,11 @@
 # Data source for current AWS region
 data "aws_region" "current" {}
 
-# Create zip files for Lambda functions - updated paths
+# Create zip files for Lambda functions
 data "archive_file" "add_contact_info_zip" {
   type        = "zip"
   source_file = "${path.root}/../lambda/add_contact_info.py"
   output_path = "${path.root}/../build/add_contact_info.zip"
-}
-
-data "archive_file" "send_contact_email_zip" {
-  type        = "zip"
-  source_file = "${path.root}/../lambda/send_contact_email.py"
-  output_path = "${path.root}/../build/send_contact_email.zip"
 }
 
 data "archive_file" "get_greetings_zip" {
@@ -105,24 +99,6 @@ resource "aws_iam_role_policy" "lambda_contact_dynamodb" {
           "dynamodb:GetItem"
         ]
         Resource = var.contacts_table_arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "dynamodb:DescribeStream",
-          "dynamodb:GetRecords",
-          "dynamodb:GetShardIterator",
-          "dynamodb:ListStreams"
-        ]
-        Resource = var.contacts_table_stream_arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ses:SendEmail",
-          "ses:SendRawEmail"
-        ]
-        Resource = "*"
       }
     ]
   })
@@ -158,30 +134,6 @@ resource "aws_lambda_function" "add_contact_info" {
       CONTACTS_TABLE_NAME = var.contacts_table_name
     }
   }
-}
-
-# Send contact email Lambda function
-resource "aws_lambda_function" "send_contact_email" {
-  filename         = data.archive_file.send_contact_email_zip.output_path
-  function_name    = "${var.project_name}-${var.environment}-send-contact-email"
-  role             = aws_iam_role.lambda_contact_role.arn
-  handler          = "send_contact_email.lambda_handler"
-  runtime          = "python3.9"
-  source_code_hash = data.archive_file.send_contact_email_zip.output_base64sha256
-
-  environment {
-    variables = {
-      FROM_EMAIL = var.from_email
-      TO_EMAIL   = var.to_email
-    }
-  }
-}
-
-# DynamoDB Stream trigger for send_contact_email
-resource "aws_lambda_event_source_mapping" "contacts_stream" {
-  event_source_arn  = var.contacts_table_stream_arn
-  function_name     = aws_lambda_function.send_contact_email.arn
-  starting_position = "LATEST"
 }
 
 # API Gateway for greetings
