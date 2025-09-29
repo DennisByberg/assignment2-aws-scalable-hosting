@@ -60,19 +60,30 @@ module "iam" {
   contacts_table_arn  = module.storage.contacts_table_arn
 }
 
-# Compute module creates the serverless compute resources
-# Lambda functions provide serverless code execution and API Gateway creates REST API endpoints that trigger Lambda functions
-module "compute" {
-  source = "./modules/compute"
+# Lambda module creates serverless functions for application logic
+# These functions handle business logic and data processing
+module "lambda" {
+  source = "./modules/lambda"
 
   project_name              = var.project_name
   environment               = var.environment
   greetings_table_name      = module.storage.greetings_table_name
-  greetings_table_arn       = module.storage.greetings_table_arn
   contacts_table_name       = module.storage.contacts_table_name
-  contacts_table_arn        = module.storage.contacts_table_arn
   lambda_greetings_role_arn = module.iam.lambda_greetings_role_arn
   lambda_contact_role_arn   = module.iam.lambda_contact_role_arn
+}
+
+# API Gateway module creates REST API endpoints
+# These endpoints receive HTTP requests and trigger Lambda functions
+module "api_gateway" {
+  source = "./modules/api-gateway"
+
+  project_name                   = var.project_name
+  environment                    = var.environment
+  get_greetings_function_name    = module.lambda.get_greetings_function_name
+  get_greetings_invoke_arn       = module.lambda.get_greetings_invoke_arn
+  add_contact_info_function_name = module.lambda.add_contact_info_function_name
+  add_contact_info_invoke_arn    = module.lambda.add_contact_info_invoke_arn
 }
 
 # CDN module creates CloudFront distribution for global content delivery
@@ -80,8 +91,9 @@ module "compute" {
 module "cdn" {
   source = "./modules/cdn"
 
-  project_name                   = var.project_name
-  environment                    = var.environment
+  project_name = var.project_name
+  environment  = var.environment
+
   s3_bucket_id                   = module.storage.frontend_bucket_name
   s3_bucket_regional_domain_name = module.storage.frontend_bucket_domain
 }
