@@ -14,101 +14,11 @@ data "archive_file" "get_greetings_zip" {
   output_path = "${path.root}/../build/get_greetings.zip"
 }
 
-# Lambda execution role for greetings function
-resource "aws_iam_role" "lambda_greetings_role" {
-  name = "${var.project_name}-${var.environment}-lambda-greetings-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-# Lambda execution role for contact functions
-resource "aws_iam_role" "lambda_contact_role" {
-  name = "${var.project_name}-${var.environment}-lambda-contact-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-# Basic Lambda execution policy for greetings
-resource "aws_iam_role_policy_attachment" "lambda_greetings_basic" {
-  role       = aws_iam_role.lambda_greetings_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-# Basic Lambda execution policy for contact
-resource "aws_iam_role_policy_attachment" "lambda_contact_basic" {
-  role       = aws_iam_role.lambda_contact_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-# DynamoDB policy for greetings function
-resource "aws_iam_role_policy" "lambda_greetings_dynamodb" {
-  name = "${var.project_name}-${var.environment}-lambda-greetings-dynamodb"
-  role = aws_iam_role.lambda_greetings_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "dynamodb:GetItem",
-          "dynamodb:PutItem",
-          "dynamodb:Query",
-          "dynamodb:Scan"
-        ]
-        Resource = var.greetings_table_arn
-      }
-    ]
-  })
-}
-
-# DynamoDB policy for contact functions
-resource "aws_iam_role_policy" "lambda_contact_dynamodb" {
-  name = "${var.project_name}-${var.environment}-lambda-contact-dynamodb"
-  role = aws_iam_role.lambda_contact_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "dynamodb:PutItem",
-          "dynamodb:GetItem"
-        ]
-        Resource = var.contacts_table_arn
-      }
-    ]
-  })
-}
-
 # Get greetings Lambda function
 resource "aws_lambda_function" "get_greetings" {
   filename         = data.archive_file.get_greetings_zip.output_path
   function_name    = "${var.project_name}-${var.environment}-get-greetings"
-  role             = aws_iam_role.lambda_greetings_role.arn
+  role             = var.lambda_greetings_role_arn # Now using variable from IAM module
   handler          = "get_greetings.lambda_handler"
   runtime          = "python3.9"
   source_code_hash = data.archive_file.get_greetings_zip.output_base64sha256
@@ -124,7 +34,7 @@ resource "aws_lambda_function" "get_greetings" {
 resource "aws_lambda_function" "add_contact_info" {
   filename         = data.archive_file.add_contact_info_zip.output_path
   function_name    = "${var.project_name}-${var.environment}-add-contact-info"
-  role             = aws_iam_role.lambda_contact_role.arn
+  role             = var.lambda_contact_role_arn # Now using variable from IAM module
   handler          = "add_contact_info.lambda_handler"
   runtime          = "python3.9"
   source_code_hash = data.archive_file.add_contact_info_zip.output_base64sha256
