@@ -1,8 +1,11 @@
-name: Deploy-Solutions
+name: Deploy Solutions
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'containerized-solution/**'
+      - 'serverless-solution/**'
   workflow_dispatch:
 
 env:
@@ -32,13 +35,24 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Check for containerized changes
+        id: changes
+        run: |
+          if git diff --name-only HEAD~1 HEAD | grep -q "^containerized-solution/"; then
+            echo "containerized=true" >> $GITHUB_OUTPUT
+          else
+            echo "containerized=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy Infrastructure
+        if: steps.changes.outputs.containerized == 'true' || github.event_name == 'workflow_dispatch'
         working-directory: containerized-solution/terraform
         run: |
           terraform init
           terraform apply -auto-approve
 
       - name: Build and Deploy Application
+        if: steps.changes.outputs.containerized == 'true' || github.event_name == 'workflow_dispatch'
         working-directory: containerized-solution
         run: |
           # Get Terraform outputs
@@ -103,7 +117,6 @@ jobs:
   deploy-serverless:
     name: Deploy Serverless Solution
     runs-on: ubuntu-latest
-    if: contains(github.event.head_commit.modified, 'serverless-solution/') || github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v4
@@ -120,7 +133,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Check for serverless changes
+        id: changes
+        run: |
+          if git diff --name-only HEAD~1 HEAD | grep -q "^serverless-solution/"; then
+            echo "serverless=true" >> $GITHUB_OUTPUT
+          else
+            echo "serverless=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy Serverless Infrastructure and Frontend
+        if: steps.changes.outputs.serverless == 'true' || github.event_name == 'workflow_dispatch'
         working-directory: serverless-solution
         run: |
           # Deploy infrastructure
