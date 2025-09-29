@@ -43,7 +43,6 @@ module "networking" {
   source = "./modules/networking"
 
   project_name = var.project_name
-  environment  = var.environment
 }
 
 # S3 bucket for images and DynamoDB table for posts

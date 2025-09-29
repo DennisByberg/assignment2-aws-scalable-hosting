@@ -22,7 +22,7 @@ resource "aws_security_group" "docker_swarm" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # HTTP access
@@ -30,7 +30,7 @@ resource "aws_security_group" "docker_swarm" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # Visualizer port
@@ -38,7 +38,7 @@ resource "aws_security_group" "docker_swarm" {
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # FastAPI app port
@@ -46,7 +46,7 @@ resource "aws_security_group" "docker_swarm" {
     from_port   = 8001
     to_port     = 8001
     protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # Docker Swarm cluster communication
@@ -92,11 +92,6 @@ resource "aws_security_group" "docker_swarm" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = {
-    Name        = "${var.project_name}-instances-sg"
-    Environment = var.environment
-  }
 }
 
 # Security Group for Application Load Balancer
@@ -110,7 +105,7 @@ resource "aws_security_group" "alb" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # Visualizer port
@@ -118,7 +113,7 @@ resource "aws_security_group" "alb" {
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # FastAPI port
@@ -126,7 +121,7 @@ resource "aws_security_group" "alb" {
     from_port   = 8001
     to_port     = 8001
     protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -134,11 +129,6 @@ resource "aws_security_group" "alb" {
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name        = "${var.project_name}-alb-sg"
-    Environment = var.environment
   }
 }
 
@@ -151,11 +141,6 @@ resource "aws_lb" "main" {
   subnets            = data.aws_subnets.default.ids
 
   enable_deletion_protection = false
-
-  tags = {
-    Name        = "${var.project_name}-alb"
-    Environment = var.environment
-  }
 }
 
 # Target Group for Nginx
@@ -175,11 +160,6 @@ resource "aws_lb_target_group" "nginx" {
     matcher             = "200"
     port                = "traffic-port"
     protocol            = "HTTP"
-  }
-
-  tags = {
-    Name        = "${var.project_name}-nginx-tg"
-    Environment = var.environment
   }
 }
 
@@ -201,11 +181,6 @@ resource "aws_lb_target_group" "visualizer" {
     port                = "traffic-port"
     protocol            = "HTTP"
   }
-
-  tags = {
-    Name        = "${var.project_name}-visualizer-tg"
-    Environment = var.environment
-  }
 }
 
 # Target Group for FastAPI
@@ -226,11 +201,6 @@ resource "aws_lb_target_group" "fastapi" {
     port                = "traffic-port"
     protocol            = "HTTP"
   }
-
-  tags = {
-    Name        = "${var.project_name}-fastapi-tg"
-    Environment = var.environment
-  }
 }
 
 # ALB Listener for HTTP (Nginx)
@@ -242,11 +212,6 @@ resource "aws_lb_listener" "http" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.nginx.arn
-  }
-
-  tags = {
-    Name        = "${var.project_name}-http-listener"
-    Environment = var.environment
   }
 }
 
@@ -260,11 +225,6 @@ resource "aws_lb_listener" "visualizer" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.visualizer.arn
   }
-
-  tags = {
-    Name        = "${var.project_name}-visualizer-listener"
-    Environment = var.environment
-  }
 }
 
 # ALB Listener for FastAPI
@@ -276,10 +236,5 @@ resource "aws_lb_listener" "fastapi" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.fastapi.arn
-  }
-
-  tags = {
-    Name        = "${var.project_name}-fastapi-listener"
-    Environment = var.environment
   }
 }
