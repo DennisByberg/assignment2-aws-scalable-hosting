@@ -91,9 +91,8 @@ module "api_gateway" {
 module "cdn" {
   source = "./modules/cdn"
 
-  project_name = var.project_name
-  environment  = var.environment
-
+  project_name                   = var.project_name
+  environment                    = var.environment
   s3_bucket_id                   = module.storage.frontend_bucket_name
   s3_bucket_regional_domain_name = module.storage.frontend_bucket_domain
 }

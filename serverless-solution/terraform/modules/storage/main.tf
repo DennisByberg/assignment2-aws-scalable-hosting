@@ -56,7 +56,7 @@ resource "aws_dynamodb_table" "contacts_table" {
   }
 }
 
-# Pre-populate greetings table with sample data
+# Pre-populate greetings table with data
 resource "aws_dynamodb_table_item" "greeting_hello" {
   table_name = aws_dynamodb_table.greetings_table.name
   hash_key   = aws_dynamodb_table.greetings_table.hash_key
