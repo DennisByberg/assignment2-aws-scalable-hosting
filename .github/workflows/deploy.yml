@@ -1,0 +1,152 @@
+name: Deploy Solutions
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: eu-north-1
+
+jobs:
+  deploy-containerized:
+    name: Deploy Containerized Solution
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.modified, 'containerized-solution/') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy Infrastructure
+        working-directory: containerized-solution/terraform
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+      - name: Build and Deploy Application
+        working-directory: containerized-solution
+        run: |
+          # Get Terraform outputs
+          cd terraform
+          MANAGER_IP=$(terraform output -raw manager_public_ip)
+          S3_BUCKET=$(terraform output -raw s3_bucket_name)
+          DYNAMODB_TABLE=$(terraform output -raw dynamodb_table_name)
+          cd ..
+
+          # Setup variables
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          REPO_NAME="fastapi-upload-demo"
+          IMAGE_TAG="v$(date +%Y%m%d%H%M%S)"
+          ECR_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO_NAME}"
+
+          # Create ECR repository
+          aws ecr create-repository \
+            --repository-name ${REPO_NAME} \
+            --region ${AWS_REGION} \
+            --image-scanning-configuration scanOnPush=true || true
+
+          # Login to ECR
+          aws ecr get-login-password --region ${AWS_REGION} | \
+          docker login --username AWS --password-stdin ${ECR_URI}
+
+          # Build and push
+          cd app
+          docker build -t ${ECR_URI}:${IMAGE_TAG} -t ${ECR_URI}:latest .
+          docker push ${ECR_URI}:${IMAGE_TAG}
+          docker push ${ECR_URI}:latest
+          cd ..
+
+          # Setup SSH
+          mkdir -p ~/.ssh
+          cp terraform/docker-swarm-key.pem ~/.ssh/
+          chmod 400 ~/.ssh/docker-swarm-key.pem
+
+          # Deploy to Swarm
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/docker-swarm-key.pem ec2-user@${MANAGER_IP} "
+            # Login to ECR on remote
+            aws ecr get-login-password --region ${AWS_REGION} | \
+            docker login --username AWS --password-stdin ${ECR_URI}
+            
+            # Deploy service
+            docker service create \
+              --name fastapi-app \
+              --mode global \
+              --publish 8001:8000 \
+              --env AWS_REGION=${AWS_REGION} \
+              --env S3_BUCKET_NAME=${S3_BUCKET} \
+              --env DYNAMODB_TABLE_NAME=${DYNAMODB_TABLE} \
+              --with-registry-auth \
+              ${ECR_URI}:latest || \
+            docker service update \
+              --image ${ECR_URI}:latest \
+              --env-add AWS_REGION=${AWS_REGION} \
+              --env-add S3_BUCKET_NAME=${S3_BUCKET} \
+              --env-add DYNAMODB_TABLE_NAME=${DYNAMODB_TABLE} \
+              fastapi-app
+          "
+
+  deploy-serverless:
+    name: Deploy Serverless Solution
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.modified, 'serverless-solution/') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy Serverless Infrastructure and Frontend
+        working-directory: serverless-solution
+        run: |
+          # Deploy infrastructure
+          cd terraform
+          terraform init
+          terraform apply -auto-approve
+
+          # Get outputs
+          S3_BUCKET=$(terraform output -raw s3_bucket_name)
+          API_GATEWAY_URL=$(terraform output -raw api_gateway_url)
+          CONTACT_API_URL=$(terraform output -raw contact_api_url)
+          CLOUDFRONT_DISTRIBUTION_ID=$(terraform output -raw cloudfront_distribution_id)
+          cd ..
+
+          # Upload frontend
+          mkdir -p /tmp/serverless-build
+          cp -r app/static /tmp/serverless-build/
+
+          sed "s|{{ api_gateway_url }}|${API_GATEWAY_URL}|g; s|{{ contact_api_url }}|${CONTACT_API_URL}|g" \
+              app/templates/index.html > /tmp/serverless-build/index.html
+
+          aws s3 sync /tmp/serverless-build/ s3://${S3_BUCKET}/ --delete
+
+          # Invalidate CloudFront
+          aws cloudfront create-invalidation \
+            --distribution-id ${CLOUDFRONT_DISTRIBUTION_ID} \
+            --paths "/*" || true
+
+          rm -rf /tmp/serverless-build
