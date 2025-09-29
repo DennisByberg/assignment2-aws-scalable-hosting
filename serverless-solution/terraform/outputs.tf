@@ -17,3 +17,8 @@ output "cloudfront_distribution_id" {
   description = "CloudFront distribution ID"
   value       = module.cdn.cloudfront_distribution_id
 }
+
+output "s3_bucket_name" {
+  description = "Name of the frontend S3 bucket"
+  value       = module.storage.frontend_bucket_name
+}
