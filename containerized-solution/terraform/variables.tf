@@ -10,12 +10,6 @@ variable "project_name" {
   default     = "docker-swarm"
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "development"
-}
-
 variable "instance_type" {
   description = "EC2 instance type for all nodes"
   type        = string
@@ -26,10 +20,4 @@ variable "ami_id" {
   description = "AMI ID for EC2 instances"
   type        = string
   default     = "ami-0c4fc5dcabc9df21d"
-}
-
-variable "worker_count" {
-  description = "Number of worker nodes"
-  type        = number
-  default     = 2
 }

@@ -68,7 +68,6 @@ module "compute" {
   source = "./modules/compute"
 
   project_name          = var.project_name
-  environment           = var.environment
   ami_id                = var.ami_id
   instance_type         = var.instance_type
   key_name              = module.ssh.key_name
@@ -76,6 +75,5 @@ module "compute" {
   instance_profile_name = module.iam.instance_profile_name
   subnet_ids            = module.networking.subnet_ids
   target_group_arns     = module.networking.target_group_arns
-  desired_workers       = var.worker_count
   aws_region            = var.aws_region
 }
