@@ -15,7 +15,7 @@ terraform {
   }
 }
 
-# Configure how Terraform connects to AWS
+# Configure AWS provider with default tags
 provider "aws" {
   region = var.aws_region
 
@@ -28,17 +28,14 @@ provider "aws" {
   }
 }
 
-# Generate a random 8-character string to make resource names unique
-# This prevents naming conflicts when multiple people deploy the same code
+# Random suffix for unique resource names
 resource "random_string" "unique_suffix" {
   length  = 8
   special = false
   upper   = false
 }
 
-# Storage module creates all storage related AWS resources
-# S3 bucket for hosting the website files like HTML CSS and JS
-# DynamoDB tables for storing application data like a database
+# S3 bucket and DynamoDB tables for application data
 module "storage" {
   source = "./modules/storage"
 
@@ -47,10 +44,7 @@ module "storage" {
   unique_suffix = random_string.unique_suffix.result
 }
 
-# IAM module creates Lambda execution roles and security policies
-# This module sets up the security permissions that allow Lambda functions to
-# execute and write logs to CloudWatch, read and write data to specific DynamoDB tables
-# and follow AWS principle of least privilege with only necessary permissions
+# IAM roles and policies for Lambda functions
 module "iam" {
   source = "./modules/iam"
 
@@ -60,8 +54,7 @@ module "iam" {
   contacts_table_arn  = module.storage.contacts_table_arn
 }
 
-# Lambda module creates serverless functions for application logic
-# These functions handle business logic and data processing
+# Lambda functions for application logic
 module "lambda" {
   source = "./modules/lambda"
 
@@ -73,8 +66,7 @@ module "lambda" {
   lambda_contact_role_arn   = module.iam.lambda_contact_role_arn
 }
 
-# API Gateway module creates REST API endpoints
-# These endpoints receive HTTP requests and trigger Lambda functions
+# API Gateway REST endpoints for Lambda functions
 module "api_gateway" {
   source = "./modules/api-gateway"
 
@@ -86,8 +78,7 @@ module "api_gateway" {
   add_contact_info_invoke_arn    = module.lambda.add_contact_info_invoke_arn
 }
 
-# CDN module creates CloudFront distribution for global content delivery
-# CloudFront caches your website files worldwide for faster loading times
+# CloudFront distribution for global content delivery
 module "cdn" {
   source = "./modules/cdn"
 
