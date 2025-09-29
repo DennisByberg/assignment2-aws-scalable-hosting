@@ -28,9 +28,6 @@ provider "aws" {
   }
 }
 
-# Get current AWS account information for IAM policies
-data "aws_caller_identity" "current" {}
-
 # SSH key generation and management for EC2 access
 module "ssh" {
   source = "./modules/ssh"
@@ -60,9 +57,7 @@ module "iam" {
   source = "./modules/iam"
 
   project_name       = var.project_name
-  environment        = var.environment
   aws_region         = var.aws_region
-  aws_account_id     = data.aws_caller_identity.current.account_id
   s3_bucket_arn      = module.storage.s3_bucket_arn
   dynamodb_table_arn = module.storage.dynamodb_table_arn
 }
