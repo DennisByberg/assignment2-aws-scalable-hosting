@@ -1,4 +1,4 @@
-name: Deploy Solutions
+name: Deploy-Solutions
 
 on:
   push:
