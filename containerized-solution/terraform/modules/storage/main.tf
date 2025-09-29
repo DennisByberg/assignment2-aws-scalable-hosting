@@ -1,28 +1,6 @@
-# Random suffix for S3 bucket name to ensure uniqueness
-resource "random_string" "bucket_suffix" {
-  length  = var.bucket_suffix_length
-  special = false
-  upper   = false
-}
-
 # S3 Bucket for image storage
 resource "aws_s3_bucket" "image_uploads" {
-  bucket = "${var.project_name}-upload-demo-${random_string.bucket_suffix.result}"
-
-  tags = {
-    Name        = "${var.project_name}-image-uploads"
-    Environment = var.environment
-    Purpose     = "FastAPI image storage"
-  }
-}
-
-# S3 Bucket versioning configuration
-resource "aws_s3_bucket_versioning" "image_uploads" {
-  bucket = aws_s3_bucket.image_uploads.id
-
-  versioning_configuration {
-    status = var.enable_s3_versioning ? "Enabled" : "Disabled"
-  }
+  bucket = "${var.project_name}-upload-demo-${var.unique_suffix}"
 }
 
 # S3 Bucket server-side encryption
@@ -50,7 +28,7 @@ resource "aws_s3_bucket_public_access_block" "image_uploads" {
 # DynamoDB Table for posts
 resource "aws_dynamodb_table" "posts" {
   name         = "${var.project_name}-upload-posts"
-  billing_mode = var.dynamodb_billing_mode
+  billing_mode = "PAY_PER_REQUEST"
   hash_key     = "id"
 
   attribute {
@@ -61,11 +39,5 @@ resource "aws_dynamodb_table" "posts" {
   # Enable point-in-time recovery for data protection
   point_in_time_recovery {
     enabled = true
-  }
-
-  tags = {
-    Name        = "${var.project_name} Upload Posts"
-    Environment = var.environment
-    Purpose     = "FastAPI post storage"
   }
 }

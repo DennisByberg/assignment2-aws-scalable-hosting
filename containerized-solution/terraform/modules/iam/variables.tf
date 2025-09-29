@@ -1,13 +1,6 @@
 variable "project_name" {
   description = "Name of the project for resource naming"
   type        = string
-  default     = "docker-swarm"
-}
-
-variable "environment" {
-  description = "Environment name (dev, staging, prod)"
-  type        = string
-  default     = "dev"
 }
 
 variable "s3_bucket_arn" {
@@ -22,10 +15,5 @@ variable "dynamodb_table_arn" {
 
 variable "aws_region" {
   description = "AWS region for SSM parameter access"
-  type        = string
-}
-
-variable "aws_account_id" {
-  description = "AWS Account ID for resource ARNs"
   type        = string
 }

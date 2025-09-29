@@ -1,3 +1,6 @@
+# Get current AWS account information for IAM policies
+data "aws_caller_identity" "current" {}
+
 # IAM Role for Docker Swarm instances
 resource "aws_iam_role" "docker_swarm_role" {
   name = "${var.project_name}-ecr-role"
@@ -14,16 +17,11 @@ resource "aws_iam_role" "docker_swarm_role" {
       }
     ]
   })
-
-  tags = {
-    Name        = "${var.project_name}-role"
-    Environment = var.environment
-  }
 }
 
-# IAM Policy for ECR and SSM access
-resource "aws_iam_role_policy" "docker_swarm_ecr_policy" {
-  name = "${var.project_name}-ecr-policy"
+# Combined IAM Policy for all required access
+resource "aws_iam_role_policy" "docker_swarm_policy" {
+  name = "${var.project_name}-policy"
   role = aws_iam_role.docker_swarm_role.id
 
   policy = jsonencode({
@@ -46,7 +44,7 @@ resource "aws_iam_role_policy" "docker_swarm_ecr_policy" {
           "ssm:GetParameter",
           "ssm:DeleteParameter"
         ]
-        Resource = "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/docker-swarm/*"
+        Resource = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/docker-swarm/*"
       },
       {
         Effect = "Allow"
@@ -54,19 +52,7 @@ resource "aws_iam_role_policy" "docker_swarm_ecr_policy" {
           "sts:GetCallerIdentity"
         ]
         Resource = "*"
-      }
-    ]
-  })
-}
-
-# IAM Policy for S3 and DynamoDB access
-resource "aws_iam_policy" "s3_dynamodb_access" {
-  name        = "${var.project_name}-S3DynamoDBAccess"
-  description = "IAM policy for S3 and DynamoDB access"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
+      },
       {
         Effect = "Allow"
         Action = [
@@ -96,26 +82,10 @@ resource "aws_iam_policy" "s3_dynamodb_access" {
       }
     ]
   })
-
-  tags = {
-    Name        = "${var.project_name}-s3-dynamodb-policy"
-    Environment = var.environment
-  }
-}
-
-# Attach S3/DynamoDB policy to role
-resource "aws_iam_role_policy_attachment" "s3_dynamodb_policy" {
-  role       = aws_iam_role.docker_swarm_role.name
-  policy_arn = aws_iam_policy.s3_dynamodb_access.arn
 }
 
 # Instance Profile
 resource "aws_iam_instance_profile" "docker_swarm_profile" {
   name = "${var.project_name}-profile"
   role = aws_iam_role.docker_swarm_role.name
-
-  tags = {
-    Name        = "${var.project_name}-instance-profile"
-    Environment = var.environment
-  }
 }
