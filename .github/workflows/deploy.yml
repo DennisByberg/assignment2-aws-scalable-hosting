@@ -30,10 +30,22 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Cleanup Phase
+      # Enhanced Cleanup Phase
       - name: Initialize Terraform for Cleanup
         working-directory: containerized-solution/terraform
         run: terraform init
+
+      - name: Remove Docker Stack
+        working-directory: containerized-solution/terraform
+        run: |
+          MANAGER_IP=$(terraform output -raw manager_public_ip 2>/dev/null || echo "")
+          if [ -n "$MANAGER_IP" ]; then
+            echo "Removing Docker stack from swarm cluster..."
+            ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
+              -i ~/.ssh/docker-swarm-key.pem ec2-user@"$MANAGER_IP" \
+              "docker stack rm myapp" || true
+            sleep 30
+          fi
 
       - name: Scale Down Auto Scaling Group
         working-directory: containerized-solution/terraform
@@ -45,20 +57,52 @@ jobs:
               --auto-scaling-group-name "$ASG_NAME" \
               --min-size 0 --max-size 0 --desired-capacity 0 \
               --region ${{ env.AWS_REGION }} || true
-            sleep 30
-          else
-            echo "No ASG found to scale down"
+            sleep 60
           fi
 
-      - name: Clean S3 Bucket
+      - name: Cleanup S3 Bucket Completely
         working-directory: containerized-solution/terraform
         run: |
           S3_BUCKET=$(terraform output -raw s3_bucket_name 2>/dev/null || echo "")
           if [ -n "$S3_BUCKET" ]; then
-            echo "Cleaning S3 bucket: $S3_BUCKET"
-            aws s3 rm "s3://$S3_BUCKET" --recursive || true
-          else
-            echo "No S3 bucket found to clean"
+            echo "Cleaning S3 bucket completely: $S3_BUCKET"
+            
+            # Remove all versioned objects
+            aws s3api list-object-versions \
+              --bucket "$S3_BUCKET" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Versions[].{Key:Key,VersionId:VersionId}' \
+              --output text 2>/dev/null | while read key version_id; do
+              if [ -n "$key" ] && [ -n "$version_id" ]; then
+                aws s3api delete-object \
+                  --bucket "$S3_BUCKET" \
+                  --key "$key" \
+                  --version-id "$version_id" \
+                  --region ${{ env.AWS_REGION }} || true
+              fi
+            done
+            
+            # Remove all delete markers
+            aws s3api list-object-versions \
+              --bucket "$S3_BUCKET" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'DeleteMarkers[].{Key:Key,VersionId:VersionId}' \
+              --output text 2>/dev/null | while read key version_id; do
+              if [ -n "$key" ] && [ -n "$version_id" ]; then
+                aws s3api delete-object \
+                  --bucket "$S3_BUCKET" \
+                  --key "$key" \
+                  --version-id "$version_id" \
+                  --region ${{ env.AWS_REGION }} || true
+              fi
+            done
+            
+            # Remove remaining objects
+            aws s3 rm "s3://$S3_BUCKET" --recursive --region ${{ env.AWS_REGION }} || true
+            sleep 5
+            
+            # Delete bucket
+            aws s3api delete-bucket --bucket "$S3_BUCKET" --region ${{ env.AWS_REGION }} || true
           fi
 
       - name: Destroy Existing Infrastructure
@@ -75,7 +119,7 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --force || true
 
-      # Deploy Phase
+      # Deploy Phase (same as before)
       - name: Deploy Infrastructure
         working-directory: containerized-solution/terraform
         run: |
@@ -95,40 +139,29 @@ jobs:
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           echo "ECR_URI=${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/fastapi-upload-demo" >> $GITHUB_ENV
-
-          echo "Creating ECR repository..."
           aws ecr create-repository --repository-name fastapi-upload-demo --region ${{ env.AWS_REGION }} || true
 
       - name: Login to ECR
         run: |
-          echo "Logging in to ECR..."
           aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_URI }}
 
       - name: Build and Push Docker Image
         working-directory: containerized-solution/app
         run: |
-          echo "Building Docker image..."
           docker build -t ${{ env.ECR_URI }}:latest .
-
-          echo "Pushing Docker image to ECR..."
           docker push ${{ env.ECR_URI }}:latest
 
       - name: Setup SSH Key
         working-directory: containerized-solution
         run: |
-          echo "Setting up SSH key for Docker Swarm manager..."
           mkdir -p ~/.ssh
           cp terraform/docker-swarm-key.pem ~/.ssh/
           chmod 400 ~/.ssh/docker-swarm-key.pem
 
       - name: Deploy Application to Docker Swarm
         run: |
-          echo "Deploying FastAPI application to Docker Swarm..."
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/docker-swarm-key.pem ec2-user@${{ env.MANAGER_IP }} "
-            echo 'Logging in to ECR on manager node...'
             aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_URI }}
-            
-            echo 'Deploying/updating FastAPI service...'
             docker service create --name fastapi-app --mode global --publish 8001:8000 \
               --env AWS_REGION=${{ env.AWS_REGION }} \
               --env S3_BUCKET_NAME=${{ env.S3_BUCKET }} \
@@ -166,7 +199,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Cleanup Phase
+      # Enhanced Cleanup Phase following destroy.sh pattern
       - name: Initialize Terraform for Cleanup
         working-directory: serverless-solution/terraform
         run: terraform init
@@ -177,28 +210,89 @@ jobs:
           DIST_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null || echo "")
           if [ -n "$DIST_ID" ]; then
             echo "Disabling CloudFront distribution: $DIST_ID"
-            ETAG=$(aws cloudfront get-distribution-config --id "$DIST_ID" --query 'ETag' --output text 2>/dev/null || echo "")
-            if [ -n "$ETAG" ]; then
-              aws cloudfront get-distribution-config --id "$DIST_ID" --query 'DistributionConfig' > /tmp/dist-config.json
-              sed -i 's/"Enabled": true/"Enabled": false/g' /tmp/dist-config.json
-              aws cloudfront update-distribution --id "$DIST_ID" --distribution-config file:///tmp/dist-config.json --if-match "$ETAG" || true
-              rm -f /tmp/dist-config.json
-              echo "Waiting for CloudFront distribution to be disabled..."
-              sleep 120
+            
+            IS_ENABLED=$(aws cloudfront get-distribution \
+              --id "$DIST_ID" \
+              --query 'Distribution.DistributionConfig.Enabled' \
+              --output text 2>/dev/null || echo "false")
+            
+            if [ "$IS_ENABLED" = "True" ]; then
+              ETAG=$(aws cloudfront get-distribution-config \
+                --id "$DIST_ID" \
+                --query 'ETag' \
+                --output text 2>/dev/null || echo "")
+              
+              if [ -n "$ETAG" ]; then
+                aws cloudfront get-distribution-config \
+                  --id "$DIST_ID" \
+                  --query 'DistributionConfig' > /tmp/dist-config.json
+                
+                sed -i 's/"Enabled": true/"Enabled": false/g' /tmp/dist-config.json
+                
+                aws cloudfront update-distribution \
+                  --id "$DIST_ID" \
+                  --distribution-config file:///tmp/dist-config.json \
+                  --if-match "$ETAG" || true
+                
+                rm -f /tmp/dist-config.json
+                
+                # Wait for deployment
+                for i in {1..20}; do
+                  STATUS=$(aws cloudfront get-distribution \
+                    --id "$DIST_ID" \
+                    --query 'Distribution.Status' \
+                    --output text 2>/dev/null || echo "")
+                  
+                  if [ "$STATUS" = "Deployed" ]; then
+                    break
+                  fi
+                  sleep 30
+                done
+              fi
             fi
-          else
-            echo "No CloudFront distribution found to disable"
           fi
 
-      - name: Clean S3 Website Bucket
+      - name: Empty S3 Bucket Completely
         working-directory: serverless-solution/terraform
         run: |
           S3_BUCKET=$(terraform output -raw s3_bucket_name 2>/dev/null || echo "")
           if [ -n "$S3_BUCKET" ]; then
-            echo "Cleaning S3 bucket: $S3_BUCKET"
-            aws s3 rm "s3://$S3_BUCKET" --recursive || true
-          else
-            echo "No S3 bucket found to clean"
+            echo "Emptying S3 bucket completely: $S3_BUCKET"
+            
+            # Check if bucket exists
+            if aws s3api head-bucket --bucket "$S3_BUCKET" >/dev/null 2>&1; then
+              # Remove all versioned objects
+              aws s3api list-object-versions \
+                --bucket "$S3_BUCKET" \
+                --query 'Versions[].[Key,VersionId]' \
+                --output text 2>/dev/null | while read key version_id; do
+                
+                if [ -n "$key" ] && [ "$key" != "None" ]; then
+                  aws s3api delete-object \
+                    --bucket "$S3_BUCKET" \
+                    --key "$key" \
+                    --version-id "$version_id" || true
+                fi
+              done
+              
+              # Remove all delete markers
+              aws s3api list-object-versions \
+                --bucket "$S3_BUCKET" \
+                --query 'DeleteMarkers[].[Key,VersionId]' \
+                --output text 2>/dev/null | while read key version_id; do
+                
+                if [ -n "$key" ] && [ "$key" != "None" ]; then
+                  aws s3api delete-object \
+                    --bucket "$S3_BUCKET" \
+                    --key "$key" \
+                    --version-id "$version_id" || true
+                fi
+              done
+              
+              # Remove remaining objects
+              aws s3 rm "s3://$S3_BUCKET" --recursive || true
+              sleep 5
+            fi
           fi
 
       - name: Destroy Existing Infrastructure
@@ -207,7 +301,7 @@ jobs:
           echo "Destroying existing Terraform infrastructure..."
           terraform destroy -auto-approve || true
 
-      # Deploy Phase
+      # Deploy Phase (same as before)
       - name: Deploy Infrastructure
         working-directory: serverless-solution/terraform
         run: |
@@ -218,7 +312,6 @@ jobs:
       - name: Get Infrastructure Outputs
         working-directory: serverless-solution/terraform
         run: |
-          echo "Retrieving infrastructure outputs..."
           echo "S3_BUCKET=$(terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
           echo "API_GATEWAY_URL=$(terraform output -raw api_gateway_url)" >> $GITHUB_ENV
           echo "CONTACT_API_URL=$(terraform output -raw contact_api_url)" >> $GITHUB_ENV
@@ -227,19 +320,16 @@ jobs:
       - name: Build Static Website
         working-directory: serverless-solution/app
         run: |
-          echo "Building static website with API endpoints..."
           mkdir -p /tmp/serverless-build
           cp -r static /tmp/serverless-build/
           sed "s|{{ api_gateway_url }}|${{ env.API_GATEWAY_URL }}|g; s|{{ contact_api_url }}|${{ env.CONTACT_API_URL }}|g" templates/index.html > /tmp/serverless-build/index.html
 
       - name: Deploy Website to S3
         run: |
-          echo "Deploying website to S3 bucket: ${{ env.S3_BUCKET }}"
           aws s3 sync /tmp/serverless-build/ s3://${{ env.S3_BUCKET }}/ --delete
 
       - name: Invalidate CloudFront Cache
         run: |
-          echo "Invalidating CloudFront cache..."
           aws cloudfront create-invalidation --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*" || true
 
       - name: Cleanup Build Files
