@@ -12,20 +12,23 @@ terraform {
       source  = "hashicorp/local"
       version = "~> 2.5.3"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.7.2"
+    }
   }
 }
 
 # Configure how Terraform connects to AWS
 provider "aws" {
   region = var.aws_region
+}
 
-  default_tags {
-    tags = {
-      Project     = var.project_name
-      Environment = var.environment
-      ManagedBy   = "Terraform"
-    }
-  }
+# Random suffix for unique resource names
+resource "random_string" "unique_suffix" {
+  length  = 8
+  special = false
+  upper   = false
 }
 
 # SSH key generation and management for EC2 access
@@ -33,7 +36,6 @@ module "ssh" {
   source = "./modules/ssh"
 
   project_name = var.project_name
-  environment  = var.environment
 }
 
 # VPC, security groups, and Application Load Balancer setup
@@ -48,8 +50,8 @@ module "networking" {
 module "storage" {
   source = "./modules/storage"
 
-  project_name = var.project_name
-  environment  = var.environment
+  project_name  = var.project_name
+  unique_suffix = random_string.unique_suffix.result
 }
 
 # IAM roles and policies for EC2 instances

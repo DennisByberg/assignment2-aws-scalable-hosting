@@ -8,7 +8,6 @@ This page lists the main technologies and services used in the architecture of t
 - **Python** – Programming language for Lambda functions
 - **Amazon API Gateway** – REST API management and routing
 - **Amazon DynamoDB** – NoSQL database for contact information storage
-- **Amazon SES** – Simple Email Service for contact form notifications
 
 ## Storage & Content Delivery
 

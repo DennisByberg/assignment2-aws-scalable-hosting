@@ -3,11 +3,6 @@ variable "project_name" {
   type        = string
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
 variable "unique_suffix" {
   description = "Random suffix for S3 bucket name"
   type        = string

@@ -13,7 +13,7 @@ variable "project_name" {
 variable "environment" {
   description = "Environment name"
   type        = string
-  default     = "demo"
+  default     = "development"
 }
 
 variable "instance_type" {
