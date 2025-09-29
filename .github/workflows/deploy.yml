@@ -12,82 +12,243 @@ jobs:
   deploy-containerized:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.5.0
-      - uses: docker/setup-buildx-action@v3
-      - uses: aws-actions/configure-aws-credentials@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy Containerized
+      # Cleanup Phase
+      - name: Initialize Terraform for Cleanup
+        working-directory: containerized-solution/terraform
+        run: terraform init
+
+      - name: Scale Down Auto Scaling Group
         working-directory: containerized-solution/terraform
         run: |
+          ASG_NAME=$(terraform output -raw autoscaling_group_name 2>/dev/null || echo "")
+          if [ -n "$ASG_NAME" ]; then
+            echo "Scaling down ASG: $ASG_NAME"
+            aws autoscaling update-auto-scaling-group \
+              --auto-scaling-group-name "$ASG_NAME" \
+              --min-size 0 --max-size 0 --desired-capacity 0 \
+              --region ${{ env.AWS_REGION }} || true
+            sleep 30
+          else
+            echo "No ASG found to scale down"
+          fi
+
+      - name: Clean S3 Bucket
+        working-directory: containerized-solution/terraform
+        run: |
+          S3_BUCKET=$(terraform output -raw s3_bucket_name 2>/dev/null || echo "")
+          if [ -n "$S3_BUCKET" ]; then
+            echo "Cleaning S3 bucket: $S3_BUCKET"
+            aws s3 rm "s3://$S3_BUCKET" --recursive || true
+          else
+            echo "No S3 bucket found to clean"
+          fi
+
+      - name: Destroy Existing Infrastructure
+        working-directory: containerized-solution/terraform
+        run: |
+          echo "Destroying existing Terraform infrastructure..."
+          terraform destroy -auto-approve || true
+
+      - name: Clean ECR Repository
+        run: |
+          echo "Cleaning ECR repository: fastapi-upload-demo"
+          aws ecr delete-repository \
+            --repository-name fastapi-upload-demo \
+            --region ${{ env.AWS_REGION }} \
+            --force || true
+
+      # Deploy Phase
+      - name: Deploy Infrastructure
+        working-directory: containerized-solution/terraform
+        run: |
+          echo "Deploying new infrastructure..."
           terraform init
           terraform apply -auto-approve
 
-      - name: Build and Deploy App
+      - name: Get Infrastructure Outputs
+        working-directory: containerized-solution/terraform
+        run: |
+          echo "Retrieving infrastructure outputs..."
+          echo "MANAGER_IP=$(terraform output -raw manager_public_ip)" >> $GITHUB_ENV
+          echo "S3_BUCKET=$(terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
+          echo "DYNAMODB_TABLE=$(terraform output -raw dynamodb_table_name)" >> $GITHUB_ENV
+
+      - name: Setup ECR Repository
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "ECR_URI=${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/fastapi-upload-demo" >> $GITHUB_ENV
+
+          echo "Creating ECR repository..."
+          aws ecr create-repository --repository-name fastapi-upload-demo --region ${{ env.AWS_REGION }} || true
+
+      - name: Login to ECR
+        run: |
+          echo "Logging in to ECR..."
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_URI }}
+
+      - name: Build and Push Docker Image
+        working-directory: containerized-solution/app
+        run: |
+          echo "Building Docker image..."
+          docker build -t ${{ env.ECR_URI }}:latest .
+
+          echo "Pushing Docker image to ECR..."
+          docker push ${{ env.ECR_URI }}:latest
+
+      - name: Setup SSH Key
         working-directory: containerized-solution
         run: |
-          cd terraform
-          MANAGER_IP=$(terraform output -raw manager_public_ip)
-          S3_BUCKET=$(terraform output -raw s3_bucket_name)
-          DYNAMODB_TABLE=$(terraform output -raw dynamodb_table_name)
-          cd ..
-
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          ECR_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/fastapi-upload-demo"
-
-          aws ecr create-repository --repository-name fastapi-upload-demo --region ${AWS_REGION} || true
-          aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_URI}
-
-          cd app
-          docker build -t ${ECR_URI}:latest .
-          docker push ${ECR_URI}:latest
-          cd ..
-
+          echo "Setting up SSH key for Docker Swarm manager..."
           mkdir -p ~/.ssh
           cp terraform/docker-swarm-key.pem ~/.ssh/
           chmod 400 ~/.ssh/docker-swarm-key.pem
 
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/docker-swarm-key.pem ec2-user@${MANAGER_IP} "
-            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_URI}
-            docker service create --name fastapi-app --mode global --publish 8001:8000 --env AWS_REGION=${AWS_REGION} --env S3_BUCKET_NAME=${S3_BUCKET} --env DYNAMODB_TABLE_NAME=${DYNAMODB_TABLE} --with-registry-auth ${ECR_URI}:latest || docker service update --image ${ECR_URI}:latest --env-add AWS_REGION=${AWS_REGION} --env-add S3_BUCKET_NAME=${S3_BUCKET} --env-add DYNAMODB_TABLE_NAME=${DYNAMODB_TABLE} fastapi-app
+      - name: Deploy Application to Docker Swarm
+        run: |
+          echo "Deploying FastAPI application to Docker Swarm..."
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/docker-swarm-key.pem ec2-user@${{ env.MANAGER_IP }} "
+            echo 'Logging in to ECR on manager node...'
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_URI }}
+            
+            echo 'Deploying/updating FastAPI service...'
+            docker service create --name fastapi-app --mode global --publish 8001:8000 \
+              --env AWS_REGION=${{ env.AWS_REGION }} \
+              --env S3_BUCKET_NAME=${{ env.S3_BUCKET }} \
+              --env DYNAMODB_TABLE_NAME=${{ env.DYNAMODB_TABLE }} \
+              --with-registry-auth ${{ env.ECR_URI }}:latest || \
+            docker service update --image ${{ env.ECR_URI }}:latest \
+              --env-add AWS_REGION=${{ env.AWS_REGION }} \
+              --env-add S3_BUCKET_NAME=${{ env.S3_BUCKET }} \
+              --env-add DYNAMODB_TABLE_NAME=${{ env.DYNAMODB_TABLE }} \
+              fastapi-app
           "
+
+      - name: Display Deployment Information
+        run: |
+          echo "🎉 Containerized deployment completed!"
+          echo "📍 Manager IP: ${{ env.MANAGER_IP }}"
+          echo "🪣 S3 Bucket: ${{ env.S3_BUCKET }}"
+          echo "🗃️ DynamoDB Table: ${{ env.DYNAMODB_TABLE }}"
 
   deploy-serverless:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.5.0
-      - uses: aws-actions/configure-aws-credentials@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy Serverless
-        working-directory: serverless-solution
+      # Cleanup Phase
+      - name: Initialize Terraform for Cleanup
+        working-directory: serverless-solution/terraform
+        run: terraform init
+
+      - name: Disable CloudFront Distribution
+        working-directory: serverless-solution/terraform
         run: |
-          cd terraform
+          DIST_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null || echo "")
+          if [ -n "$DIST_ID" ]; then
+            echo "Disabling CloudFront distribution: $DIST_ID"
+            ETAG=$(aws cloudfront get-distribution-config --id "$DIST_ID" --query 'ETag' --output text 2>/dev/null || echo "")
+            if [ -n "$ETAG" ]; then
+              aws cloudfront get-distribution-config --id "$DIST_ID" --query 'DistributionConfig' > /tmp/dist-config.json
+              sed -i 's/"Enabled": true/"Enabled": false/g' /tmp/dist-config.json
+              aws cloudfront update-distribution --id "$DIST_ID" --distribution-config file:///tmp/dist-config.json --if-match "$ETAG" || true
+              rm -f /tmp/dist-config.json
+              echo "Waiting for CloudFront distribution to be disabled..."
+              sleep 120
+            fi
+          else
+            echo "No CloudFront distribution found to disable"
+          fi
+
+      - name: Clean S3 Website Bucket
+        working-directory: serverless-solution/terraform
+        run: |
+          S3_BUCKET=$(terraform output -raw s3_bucket_name 2>/dev/null || echo "")
+          if [ -n "$S3_BUCKET" ]; then
+            echo "Cleaning S3 bucket: $S3_BUCKET"
+            aws s3 rm "s3://$S3_BUCKET" --recursive || true
+          else
+            echo "No S3 bucket found to clean"
+          fi
+
+      - name: Destroy Existing Infrastructure
+        working-directory: serverless-solution/terraform
+        run: |
+          echo "Destroying existing Terraform infrastructure..."
+          terraform destroy -auto-approve || true
+
+      # Deploy Phase
+      - name: Deploy Infrastructure
+        working-directory: serverless-solution/terraform
+        run: |
+          echo "Deploying new serverless infrastructure..."
           terraform init
           terraform apply -auto-approve
 
-          S3_BUCKET=$(terraform output -raw s3_bucket_name)
-          API_GATEWAY_URL=$(terraform output -raw api_gateway_url)
-          CONTACT_API_URL=$(terraform output -raw contact_api_url)
-          CLOUDFRONT_DISTRIBUTION_ID=$(terraform output -raw cloudfront_distribution_id)
-          cd ..
+      - name: Get Infrastructure Outputs
+        working-directory: serverless-solution/terraform
+        run: |
+          echo "Retrieving infrastructure outputs..."
+          echo "S3_BUCKET=$(terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
+          echo "API_GATEWAY_URL=$(terraform output -raw api_gateway_url)" >> $GITHUB_ENV
+          echo "CONTACT_API_URL=$(terraform output -raw contact_api_url)" >> $GITHUB_ENV
+          echo "CLOUDFRONT_DISTRIBUTION_ID=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_ENV
 
+      - name: Build Static Website
+        working-directory: serverless-solution/app
+        run: |
+          echo "Building static website with API endpoints..."
           mkdir -p /tmp/serverless-build
-          cp -r app/static /tmp/serverless-build/
-          sed "s|{{ api_gateway_url }}|${API_GATEWAY_URL}|g; s|{{ contact_api_url }}|${CONTACT_API_URL}|g" app/templates/index.html > /tmp/serverless-build/index.html
+          cp -r static /tmp/serverless-build/
+          sed "s|{{ api_gateway_url }}|${{ env.API_GATEWAY_URL }}|g; s|{{ contact_api_url }}|${{ env.CONTACT_API_URL }}|g" templates/index.html > /tmp/serverless-build/index.html
 
-          aws s3 sync /tmp/serverless-build/ s3://${S3_BUCKET}/ --delete
-          aws cloudfront create-invalidation --distribution-id ${CLOUDFRONT_DISTRIBUTION_ID} --paths "/*" || true
-          rm -rf /tmp/serverless-build
+      - name: Deploy Website to S3
+        run: |
+          echo "Deploying website to S3 bucket: ${{ env.S3_BUCKET }}"
+          aws s3 sync /tmp/serverless-build/ s3://${{ env.S3_BUCKET }}/ --delete
+
+      - name: Invalidate CloudFront Cache
+        run: |
+          echo "Invalidating CloudFront cache..."
+          aws cloudfront create-invalidation --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*" || true
+
+      - name: Cleanup Build Files
+        run: rm -rf /tmp/serverless-build
+
+      - name: Display Deployment Information
+        run: |
+          echo "🎉 Serverless deployment completed!"
+          echo "🌐 API Gateway URL: ${{ env.API_GATEWAY_URL }}"
+          echo "📧 Contact API URL: ${{ env.CONTACT_API_URL }}"
+          echo "🪣 S3 Bucket: ${{ env.S3_BUCKET }}"
+          echo "☁️ CloudFront Distribution: ${{ env.CLOUDFRONT_DISTRIBUTION_ID }}"
