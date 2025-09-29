@@ -1,8 +1,3 @@
-output "s3_bucket_name" {
-  description = "Name of the S3 bucket"
-  value       = module.storage.s3_bucket_name
-}
-
 output "api_gateway_url" {
   description = "URL of the API Gateway"
   value       = module.compute.api_gateway_url
