@@ -40,7 +40,6 @@ module "iam" {
   source = "./modules/iam"
 
   project_name        = var.project_name
-  environment         = var.environment
   greetings_table_arn = module.storage.greetings_table_arn
   contacts_table_arn  = module.storage.contacts_table_arn
 }
@@ -50,7 +49,6 @@ module "lambda" {
   source = "./modules/lambda"
 
   project_name              = var.project_name
-  environment               = var.environment
   greetings_table_name      = module.storage.greetings_table_name
   contacts_table_name       = module.storage.contacts_table_name
   lambda_greetings_role_arn = module.iam.lambda_greetings_role_arn
@@ -62,7 +60,6 @@ module "api_gateway" {
   source = "./modules/api-gateway"
 
   project_name                   = var.project_name
-  environment                    = var.environment
   get_greetings_function_name    = module.lambda.get_greetings_function_name
   get_greetings_invoke_arn       = module.lambda.get_greetings_invoke_arn
   add_contact_info_function_name = module.lambda.add_contact_info_function_name
@@ -74,7 +71,6 @@ module "cdn" {
   source = "./modules/cdn"
 
   project_name                   = var.project_name
-  environment                    = var.environment
   s3_bucket_id                   = module.storage.frontend_bucket_name
   s3_bucket_regional_domain_name = module.storage.frontend_bucket_domain
 }

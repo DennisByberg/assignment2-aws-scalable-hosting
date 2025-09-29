@@ -1,6 +1,6 @@
 # CloudFront Origin Access Control for S3 bucket access
 resource "aws_cloudfront_origin_access_control" "main" {
-  name                              = "${var.project_name}-s3-oac-${var.environment}"
+  name                              = "${var.project_name}-s3-oac"
   description                       = "OAC for ${var.project_name} S3 bucket"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
@@ -42,11 +42,6 @@ resource "aws_cloudfront_distribution" "main" {
 
   viewer_certificate {
     cloudfront_default_certificate = true
-  }
-
-  tags = {
-    Name        = "${var.project_name}-cloudfront-${var.environment}"
-    Environment = var.environment
   }
 }
 

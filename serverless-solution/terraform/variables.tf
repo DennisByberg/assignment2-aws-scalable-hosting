@@ -9,9 +9,3 @@ variable "project_name" {
   type        = string
   default     = "aws-serverless-solution"
 }
-
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "development"
-}

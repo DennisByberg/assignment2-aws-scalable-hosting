@@ -3,11 +3,6 @@ variable "project_name" {
   type        = string
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
 variable "s3_bucket_id" {
   description = "ID of the S3 bucket to use as origin"
   type        = string

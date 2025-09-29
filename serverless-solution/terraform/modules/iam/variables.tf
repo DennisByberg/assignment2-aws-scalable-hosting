@@ -3,11 +3,6 @@ variable "project_name" {
   type        = string
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
 variable "greetings_table_arn" {
   description = "ARN of the greetings DynamoDB table"
   type        = string

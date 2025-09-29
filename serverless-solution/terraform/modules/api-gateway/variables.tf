@@ -3,11 +3,6 @@ variable "project_name" {
   type        = string
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-}
-
 variable "get_greetings_function_name" {
   description = "Name of the get greetings Lambda function"
   type        = string

@@ -3,7 +3,7 @@ data "aws_region" "current" {}
 
 # Single API Gateway for all endpoints
 resource "aws_api_gateway_rest_api" "main_api" {
-  name = "${var.project_name}-${var.environment}-api"
+  name = "${var.project_name}-api"
 }
 
 # Greetings resource

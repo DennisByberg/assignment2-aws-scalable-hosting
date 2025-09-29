@@ -1,6 +1,6 @@
 # Lambda execution role for greetings function
 resource "aws_iam_role" "lambda_greetings_role" {
-  name = "${var.project_name}-${var.environment}-lambda-greetings-role"
+  name = "${var.project_name}-lambda-greetings-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -18,7 +18,7 @@ resource "aws_iam_role" "lambda_greetings_role" {
 
 # Lambda execution role for contact functions
 resource "aws_iam_role" "lambda_contact_role" {
-  name = "${var.project_name}-${var.environment}-lambda-contact-role"
+  name = "${var.project_name}-lambda-contact-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -36,7 +36,7 @@ resource "aws_iam_role" "lambda_contact_role" {
 
 # Combined policy for greetings function
 resource "aws_iam_role_policy" "lambda_greetings_policy" {
-  name = "${var.project_name}-${var.environment}-lambda-greetings-policy"
+  name = "${var.project_name}-lambda-greetings-policy"
   role = aws_iam_role.lambda_greetings_role.id
 
   policy = jsonencode({
@@ -67,7 +67,7 @@ resource "aws_iam_role_policy" "lambda_greetings_policy" {
 
 # Combined policy for contact function
 resource "aws_iam_role_policy" "lambda_contact_policy" {
-  name = "${var.project_name}-${var.environment}-lambda-contact-policy"
+  name = "${var.project_name}-lambda-contact-policy"
   role = aws_iam_role.lambda_contact_role.id
 
   policy = jsonencode({
