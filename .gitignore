@@ -122,3 +122,6 @@ yarn-error.log*
 temp/
 tmp/
 *.tmp
+
+# Private documentation and reports
+shared/private/
