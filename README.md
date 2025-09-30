@@ -42,7 +42,7 @@ Hela arkitekturen deployeras och hanteras genom Terraform-moduler som säkerstä
 
 CloudFront fungerar som mitt globala content delivery network (CDN). Jag använder det för att distribuera frontend-innehållet från edge locations världen över vilket drastiskt förbättrar prestanda för användare oavsett geografisk plats.
 
-```toml
+```hcl
 resource "aws_cloudfront_distribution" "main" {
   origin {
     domain_name              = var.s3_bucket_regional_domain_name
@@ -113,7 +113,7 @@ CORS-headers är kritiska för att frontend ska kunna kommunicera med API:et. Ut
 
 Jag valde DynamoDB för dess serverless natur och automatiska skalning. Tabellerna skapas med PAY_PER_REQUEST billing för att minimera kostnader:
 
-```toml
+```hcl
 resource "aws_dynamodb_table" "greetings_table" {
   name         = "${var.project_name}-greetings"
   billing_mode = "PAY_PER_REQUEST"
@@ -192,7 +192,7 @@ Detta ger mig full kontroll över runtime-miljön medan jag fortfarande får fö
 
 Auto Scaling Group hanterar worker-noderna och skalar automatiskt baserat på CPU-användning:
 
-```toml
+```hcl
 resource "aws_autoscaling_group" "worker_asg" {
   name                = "${var.project_name}-workers"
   vpc_zone_identifier = var.subnet_ids
@@ -221,7 +221,7 @@ Jag satte minimum till 2 och maximum till 6 för att hantera trafikspikningar. E
 
 ALB distribuerar trafik över flera portar för olika tjänster:
 
-```toml
+```hcl
 # ALB Listener för FastAPI
 resource "aws_lb_listener" "fastapi" {
   load_balancer_arn = aws_lb.main.arn
@@ -337,7 +337,7 @@ Modulär struktur gör koden lättare att förstå, testa och återanvända. Var
 
 Jag implementerade säkerhet med specifika Security Groups för varje komponent:
 
-```toml
+```hcl
 # Security Group för Docker Swarm instances
 resource "aws_security_group" "docker_swarm" {
   name_prefix = "${var.project_name}-instances-"
@@ -371,7 +371,7 @@ Principle of least privilege tillämpas vilket betyder att varje komponent har b
 
 Jag skapade specifika IAM-roller för olika komponenter:
 
-```toml
+```hcl
 resource "aws_iam_role_policy" "docker_swarm_policy" {
   name = "${var.project_name}-policy"
   role = aws_iam_role.docker_swarm_role.id
@@ -490,7 +490,7 @@ determine_image_tag() {
 
 Båda lösningarna integrerar med CloudWatch för monitoring:
 
-```toml
+```hcl
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   alarm_name          = "${var.project_name}-cpu-high"
   comparison_operator = "GreaterThanThreshold"
@@ -514,7 +514,7 @@ Jag satte threshold till 50% CPU för att ge tillräckligt med marginal för nya
 
 Jag konfigurerade hälsokontroller för att säkerställa att endast friska instanser tar emot trafik:
 
-```toml
+```hcl
 resource "aws_lb_target_group" "fastapi" {
   name     = "${var.project_name}-fastapi"
   port     = 8001
